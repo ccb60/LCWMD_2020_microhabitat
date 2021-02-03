@@ -1,0 +1,310 @@
+---
+title: "LCWMD Microhabitat Data Review"
+author: "Curtis C. Bohlen"
+date: "2/2/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+
+# Load Libraries
+(code omitted)
+```{r echo = FALSE}
+library(tidyverse)
+library(readxl)
+
+library(CBEPgraphics)
+load_cbep_fonts()
+theme_set(theme_cbep())
+```
+
+
+# Load Data
+(code omitted)
+```{r echo = FALSE}
+the_data <- read_excel('2020_habitat_data.xls', na = 'ND',
+                       col_types = c('text', 'text', rep('numeric', 17))) %>%
+  select(-Sum, -Count) %>%
+  rename(Station = `Station ID`,
+         Plot = `Plot ID`) %>%
+  mutate(Plot_num = as.numeric(substr(Plot, 1, nchar(Plot)-1)),
+         Subplot = substr(Plot, nchar(Plot), nchar(Plot))) %>%
+  mutate(across(c(-Station, - Plot, - Plot_num, -Subplot),
+                ~ replace_na(., 0))) %>%
+  rename(Leaf_Litter = `Leaf Litter`)
+```
+
+## Reformat data
+(code omitted)
+```{r echo - FALSE}
+the_names = names(the_data[3:17])
+long_data <- the_data %>%
+  pivot_longer(c(-Station, - Plot, - Plot_num, -Subplot), 
+               names_to = 'Microhabitat',
+               values_to = 'Cover') %>%
+  mutate(Microhabitat = factor(Microhabitat, levels = the_names)) %>%
+  mutate(Reach = factor(Station, levels  = c('S05', 'S17'), 
+                        labels =c('Reference', 'Restoration')))
+rm(the_names)
+```
+
+# Introduction
+
+The goal is to estimate the relative area of each microhabitat in each stream 
+reach.  The best estimate of the relative area will be to add up the area of 
+each microhabitat observed, and divide by the total area of all of the plots.
+
+That is, the best estimate of relative area across the reach is the mean
+percent cover of each habitat type, calculated across all quadrats (including
+your NDs as zero cover). 
+
+Although we often mistrust the mean when dealing with skewed data, in this case,
+the mean is the correct summary statistic for our purposes.
+
+# Plot Estimated Relative Percent Covers
+```{r echo = FALSE}
+pooled_data <- long_data %>%
+  group_by(Reach, Microhabitat) %>%
+  summarize(Cover = mean(Cover),
+            n = sum(Cover > 0),
+            .groups = 'drop')
+```
+
+
+```{r echo = FALSE}
+plt <- ggplot(pooled_data, aes(x = Microhabitat, y = Cover, fill = Reach)) +
+  geom_col(position = 'dodge', lwd = 0.5, color = 'gray50') +
+  
+  xlab('') +
+  ylab('Total Percent Cover') + 
+  
+  theme_cbep(base_size = 9) +
+  theme(axis.text.x = element_text(angle = 90, vjust = .25, hjust = 1)) 
+plt
+```
+
+Visually, what jumps out are:
+*  High levels of Muck, Gravel, and Cobble in the Restoration Reach
+*  High levels of silt and Sand in the Reference Reach.
+But how can we be sure those visual differences are meaningful, and equally 
+important, that less visually impressive differences are NOT meaningful?
+
+# Testing for "Significance"
+
+## Can we use T tests? 
+We just calculated Total Percent Cover of each Microhabitat as the average of 63 
+observations from each stream reach.  Comparing two means is what T tests do...
+
+Unfortunately, T tests are not appropriate for several reasons. Most
+importantly, the observed data are far from normally distributed, and the sample
+size is only moderate. The T statistic is based on asymptotic behavior of a sum
+or mean drawn from a population with an unknown standard deviation, which
+therefore must be estimated from the data. Convergence on the (symmetrical) T
+distribution is slow when you start with a highly skewed distribution (as here). 
+
+Another, more subtle point is that the different microhabitat types are not 
+independent, since they must add up to 100% of the habitat. Comparing each
+microhabitat separately is likely to overstate statistical significance 
+(although by only a small bit here).
+
+# Alternatives to T Tests
+The most straight forward approach to comparing two means from "badly behaved" 
+distributions is probably to use a resampling test of some sort, like a 
+bootstrap.
+
+Under the null hypothesis of no difference in microhabitat distribution, the
+mean percent cover of each microhabitat in the two reaches is the same. We can 
+readily simulate a draw from two data distributions that matches that 
+assumption, simply by drawing two samples from all the observations.  We do
+that 1000 times, and count up how many times we see differences as large as the
+one we observed in the real data.
+
+You can get a lot more sophisticated about methods of random sampling, but the 
+following is quick, easy to understand, and it works.
+
+# Example of a Resampling Test
+```{r resampling_example}
+# Focus only on sand for now
+sand <- long_data %>%
+  filter(Microhabitat == 'Sand')
+
+# How big a difference did we actually see?
+observed <- sand %>%
+  group_by(Reach) %>%
+  summarize(Cover = mean(Cover)) %>%
+  pull(Cover)
+
+(threshold = abs(observed[1] - observed[2])  )
+```
+So, we saw a difference of a bit more than 9.25% 
+
+# Resample
+```{r}
+difs <- vector('numeric', 1000)
+for (samp in 1:1000) {
+  ref  <- sample(sand$Cover, 21*3, replace = TRUE)
+  rest <- sample(sand$Cover, 21*3, replace = TRUE)
+  dif = mean(ref) - mean(rest)
+  difs[samp] <- dif
+}
+
+ggplot(data = NULL, aes(difs)) + geom_histogram() +
+  geom_vline(xintercept = -9.25, color = 'red') +
+  geom_vline(xintercept = 9.25, color = 'red')
+```
+So you can see, observations as extreme as the ones we saw occur pretty 
+regularly, even under the null hypothesis.  We can estimate a P value by direct
+counting:
+
+```{r}
+sum(difs > 9.25 | difs < -9.25) / 1000
+```
+So, that difference of 9.25 percent is just marginally statistically 
+significant, with an estimated P value by resampling of about 6%. (On this run,
+It's a simulaiton, so results will differ.) 
+
+Note that I use a two sided test here, because *a priori* I have no basis to 
+know which stream reach is higher in any particular habitat type.  I'm equally
+interested regardless of which way the difference turns out.
+
+## Repeat for All Microhabitats
+If we can wrap all that logic up into a tidy function, we can repeat the
+analysis for each microhabitat.  Not I change to simulating each comparison
+10,000 times to improve resolution.
+
+```{r create)fxn}
+the_test <- function(my_data) {
+  # How big a difference did we actually see?
+  observed <- my_data %>%
+    group_by(Reach) %>%
+    summarize(Cover = mean(Cover)) %>%
+    pull(Cover)
+  threshold = abs(observed[1] - observed[2])
+  
+  # Run the bootstrap
+  difs <- vector('numeric', 10000)
+  for (samp in 1:10000) {
+    ref  <- sample(my_data$Cover, 21*3, replace = TRUE)
+    rest <- sample(my_data$Cover, 21*3, replace = TRUE)
+    dif = mean(ref) - mean(rest)
+    difs[samp] <- dif
+  }
+    
+    return(list(difference = threshold,
+                p.value= sum(difs > threshold | difs < -threshold) / 10000))
+}
+```
+
+## Test the function
+```{r test_function}
+the_test(sand)
+```
+Note the p value is a little different,  Since this is a simulation, it will be 
+different each time you run the code. (if you want to prevent that, use 
+`set.seed()`).
+
+```{r}
+micros <- levels(long_data$Microhabitat) 
+results <- vector('list', length(micros))
+for (m in 1:length(micros)) {
+  r <- the_test(long_data[long_data$Microhabitat == micros[[m]],])
+  results[[m]] <- r
+}
+names(results) <- micros
+```
+
+
+# Results
+```{r}
+m <- as.matrix(transpose(results)$p.value)
+colnames(m)<- 'p.value'
+m
+```
+
+So, we can conclude (based on your suggested p value threshold of 10%) that
+differences in microhabitat abundance for the following microhabitats 
+are meaningful:
+
+*  Muck  
+*  Silt  
+*  Sand  
+*  Gravel  
+*  Cobble  
+*  Bedrock  
+*  Aquatic Bed  
+*  Fill Garbage  
+
+# Modified graphic
+```{r}
+should_annot <- m < 0.1
+
+x = 1:15
+xlocs = if_else(should_annot, x, NA_integer_)
+
+plt  +
+annotate(geom = 'point', xlocs, y = 29, shape = 25, size = 2, fill = 'gray80')
+```
+
+
+
+# An Alternative
+Practically, there are a couple of other approaches to testing statistical
+significance. The simplest is probably to use a contingency table to test 
+frequency of observing habitat types, and test if frequencies are different. 
+This does two things differently.  First, it only determines if microhabitat 
+frequencies overall are different (it does not tell you WHICH frequencies are 
+different) and it only looks at how many times you observed each microhabitat
+type, not what the  percent cover was.
+
+In that sense it's a less informative test, but it is somewhat complementary 
+to th prior approach, so provides a good check to see if the other results make 
+sense.
+
+```{r}
+xtabs(~ Microhabitat + Reach, data = long_data[long_data$Cover > 0,])
+```
+
+Contingency tables are notoriously unhappy with cells that have expectations
+under the null hypothesis under 5 or so.
+
+We should pool "rare" habitats -- those with fewer than 10 observations.
+ClayPieces
+HardClayBottom
+Boulder
+Bedrock
+Fern
+Fill_Garbage
+
+
+df %>%
+   mutate(x= recode(x, "c('A', 'B')='A+B';c('D', 'E') = 'D+E'"))
+
+```{r}
+ct_data <- long_data %>%
+  filter(Cover > 0) %>%
+  mutate(Microhabitat = recode (Microhabitat,
+                                ClayPieces= "Rare",
+                                HardClayBottom = "Rare",
+                                Boulder = "Rare",
+                                Bedrock = "Rare",
+                                Fern = "Rare",
+                                Fill_Garbage = "Rare"))
+```
+
+
+```{r}
+(mytab <- xtabs(~ Microhabitat + Reach, data = ct_data))
+```
+```{r}
+chisq.test(mytab)
+```
+
+
+
+
