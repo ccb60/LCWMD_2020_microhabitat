@@ -2,7 +2,7 @@
 title: "LCWMD Microhabitat Data Review"
 author: "Curtis C. Bohlen"
 date: "2/2/2021"
-output: pdf_document
+output: word_document
 ---
 
 ```{r setup, include=FALSE}
@@ -23,7 +23,6 @@ library(CBEPgraphics)
 load_cbep_fonts()
 theme_set(theme_cbep())
 ```
-
 
 # Load Data
 (code omitted)
@@ -67,7 +66,7 @@ your NDs as zero cover).
 Although we often mistrust the mean when dealing with skewed data, in this case,
 the mean is the correct summary statistic for our purposes.
 
-# Plot Estimated Relative Percent Covers
+# Plot Estimated Percent Covers
 ```{r echo = FALSE}
 pooled_data <- long_data %>%
   group_by(Reach, Microhabitat) %>%
@@ -78,14 +77,14 @@ pooled_data <- long_data %>%
 
 
 ```{r echo = FALSE}
-plt <- ggplot(pooled_data, aes(x = Microhabitat, y = Cover, fill = Reach)) +
-  geom_col(position = 'dodge', lwd = 0.5, color = 'gray50') +
-  
+plt <- ggplot(pooled_data, aes(Microhabitat, Cover)) +
+  geom_col(aes(fill = Reach), position = 'dodge')  +
+
   xlab('') +
-  ylab('Total Percent Cover') + 
+  ylab('Total Percent Cover') +
   
   theme_cbep(base_size = 9) +
-  theme(axis.text.x = element_text(angle = 90, vjust = .25, hjust = 1)) 
+  theme(axis.text.x = element_text(angle = 90, vjust = .25, hjust = 1))
 plt
 ```
 

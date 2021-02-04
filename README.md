@@ -22,12 +22,11 @@ For more information on LCWMD, see [their web site](restorelongcreek.org).
 A few years ago, LCWMD undertook an effort to improve habitat quality along a 
 portion of Long Creek.  Years of adjacent development activity had restricted 
 the floodplain, eroded the stream channel, and removed woody debris and other
-roughness elelments from the channel.  In what has probably become the most
-ambitious urban stream restoration project in maine history, LCWMD removed
-fil lfrom teh floodplain, installed log jabs and other striuctures in the
+roughness elements from the channel.  In what has probably become the most
+ambitious urban stream restoration project in Maine history, LCWMD removed
+fill from the floodplain, installed log jabs and other structures in the
 stream, added gravel and cobbles to the stream, and emplaced downed trees,
-rootwads, and wood int ehfloodplain.the most significant urban stream 
-restoration offort in Maine.
+rootwads, and wood in the floodplain.
 
 GZA Geoenvironmental Incorporated (GZA) has been monitoring the effects of
 the restoration on stream habitat and the biota. They were kind enough to 
